@@ -1,33 +1,53 @@
-async function loadDatabase() {
-  const db = await idb.openDB("tailwind_store", 1, {
-    upgrade(db, oldVersion, newVersion, transaction) {
-      db.createObjectStore("products", {
-        keyPath: "id",
-        autoIncrement: true,
-      });
-      db.createObjectStore("sales", {
-        keyPath: "id",
-        autoIncrement: true,
-      });
-    },
-  });
+async function fetchProducts() {
+  const response = await fetch('http://localhost:3001/products');
+  if (!response.ok) {
+    throw new Error('Failed to fetch products');
+  }
+  return await response.json();
+}
 
-  return {
-    db,
-    getProducts: async () => await db.getAll("products"),
-    addProduct: async (product) => await db.add("products", product),
-    editProduct: async (product) =>
-      await db.put("products", product.id, product),
-    deleteProduct: async (product) => await db.delete("products", product.id),
-  };
+async function addProductAPI(product) {
+  const response = await fetch('http://localhost:3001/products', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(product),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to add product');
+  }
+  return await response.json();
+}
+
+async function editProductAPI(product) {
+  const response = await fetch(`http://localhost:3001/products/${product.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(product),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to edit product');
+  }
+  return await response.json();
+}
+
+async function deleteProductAPI(productId) {
+  const response = await fetch(`http://localhost:3001/products/${productId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to delete product');
+  }
 }
 
 function initApp() {
   const app = {
-    db: null,
     time: null,
     firstTime: localStorage.getItem("first_time") === null,
     activeMenu: 'pos',
+    // New method to change active menu
+    setActiveMenu(menu) {
+      this.activeMenu = menu;
+    },
     loadingSampleData: false,
     moneys: [2000, 5000, 10000, 20000, 50000, 100000],
     products: [],
@@ -39,21 +59,27 @@ function initApp() {
     receiptNo: null,
     receiptDate: null,
     async initDatabase() {
-      this.db = await loadDatabase();
-      this.loadProducts();
+      await this.loadProducts();
     },
     async loadProducts() {
-      this.products = await this.db.getProducts();
-      console.log("products loaded", this.products);
+      try {
+        this.products = await fetchProducts();
+        console.log("products loaded", this.products);
+      } catch (error) {
+        console.error(error);
+      }
     },
     async startWithSampleData() {
       const response = await fetch("data/sample.json");
       const data = await response.json();
       this.products = data.products;
       for (let product of data.products) {
-        await this.db.addProduct(product);
+        try {
+          await addProductAPI(product);
+        } catch (error) {
+          console.error(error);
+        }
       }
-
       this.setFirstTime(false);
     },
     startBlank() {
